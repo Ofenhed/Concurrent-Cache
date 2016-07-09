@@ -4,21 +4,21 @@ import Data.Maybe (isNothing)
 import Control.Concurrent (forkIO, threadDelay, killThread, MVar, modifyMVar_, readMVar, ThreadId, newMVar)
 import Control.Monad (when)
 
-data CachedData a = CachedData (Int, (MVar (Maybe ThreadId, (IO a), Maybe a)))
+data CachedData a = CachedData (Int, (MVar (Maybe ThreadId, IO a, Maybe a)))
 
 -- |Fetch data from a cache
 fetch :: CachedData a
       -- ^ @Cache@, the cache to fetch a value from
       -> IO (a)
 fetch (CachedData (timeout, mvar)) = go where
-  go = readMVar mvar >>= \m@(thread,action,value) -> do
+  go = readMVar mvar >>= \(thread,_,value) -> do
     when (timeout /= 0) $ do
       when (not $ isNothing thread) $ let Just thread' = thread in killThread thread'
-      modifyMVar_ mvar $ \mvar'@(_, action, value) -> do
+      modifyMVar_ mvar $ \(_, action', value') -> do
         newThreadId <- forkIO $ do
           threadDelay timeout
-          modifyMVar_ mvar $ \mvar'@(_, action, _) -> return (Nothing, action, Nothing)
-        return (Just newThreadId, action, value)
+          modifyMVar_ mvar $ \(_, action'', _) -> return (Nothing, action'', Nothing)
+        return (Just newThreadId, action', value')
     case value of
       Nothing -> do
         modifyMVar_ mvar $ \mvar'@(threadId', action', value') -> case value' of
