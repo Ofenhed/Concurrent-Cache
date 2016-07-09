@@ -11,7 +11,8 @@ fetch :: CachedData a
       -- ^ @Cache@, the cache to fetch a value from
       -> IO (a)
 fetch (ReadOnceCachedData mvar) = go where
-  go = readMVar mvar >>= \cached -> do
+  go = do
+    cached <- readMVar mvar
     case cached of
       Left _ -> do
         modifyMVar_ mvar $ \cached' -> case cached' of
@@ -21,7 +22,8 @@ fetch (ReadOnceCachedData mvar) = go where
       Right value -> return value
 
 fetch (TimedCachedData (timeout, mvar)) = go where
-  go = readMVar mvar >>= \(thread,_,value) -> do
+  go = do
+    (thread,_,value) <- readMVar mvar
     case value of
       Nothing -> do
         modifyMVar_ mvar $ \mvar'@(threadId', action', value') -> case value' of
