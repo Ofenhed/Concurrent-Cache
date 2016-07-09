@@ -3,20 +3,21 @@
 
 name:                Concurrent-Cache
 version:             0.1.0.0
--- synopsis:            
--- description:         
+synopsis:            A Cached variable for IO functions.
+description:         This package allows for caching IO functions, either on a
+                     timeout or designed to only fetch once.
 license:             BSD3
 license-file:        LICENSE
 author:              Marcus Ofenhed
 maintainer:          marcus@conditionraise.se
 -- copyright:           
--- category:            
+category:            Concurrency
 build-type:          Simple
 extra-source-files:  ChangeLog.md
 cabal-version:       >=1.10
 
 library
-  exposed-modules:     Concurrent.Cache
+  exposed-modules:     Control.Concurrent.Cache
   -- other-modules:       
   -- other-extensions:    
   build-depends:       base >=4.9 && <4.10, stm

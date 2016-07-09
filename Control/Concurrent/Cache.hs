@@ -1,4 +1,4 @@
-module Concurrent.Cache (CachedData, fetch, createCache) where
+module Control.Concurrent.Cache (CachedData, fetch, createCache) where
 
 import Data.Maybe (isNothing)
 import Control.Concurrent (forkIO, threadDelay, killThread, MVar, modifyMVar_, readMVar, ThreadId, newMVar)
