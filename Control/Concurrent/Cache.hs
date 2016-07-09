@@ -36,7 +36,6 @@ fetch (TimedCachedData (timeout, mvar)) = go where
         modifyMVar_ mvar $ \(_, action', value') -> do
           newThreadId <- forkIO $ do
             threadDelay timeout
-            putStrLn "Deleting"
             modifyMVar_ mvar $ \(_, action'', _) -> return (Nothing, action'', Nothing)
           return (Just newThreadId, action', value')
         return value'
