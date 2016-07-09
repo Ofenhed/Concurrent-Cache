@@ -2,7 +2,7 @@
 -- documentation, see http://haskell.org/cabal/users-guide/
 
 name:                Concurrent-Cache
-version:             0.1.0.1
+version:             0.1.0.2
 synopsis:            A Cached variable for IO functions.
 description:         This package allows for caching IO functions, either on a
                      timeout or designed to only fetch once.

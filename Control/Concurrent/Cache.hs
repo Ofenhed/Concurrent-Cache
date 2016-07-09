@@ -32,8 +32,8 @@ fetch (TimedCachedData (timeout, mvar)) = go where
                                           Just x -> return $ mvar'
         go
       Just value' -> do 
-        when (not $ isNothing thread) $ let Just thread' = thread in killThread thread'
-        modifyMVar_ mvar $ \(_, action', value') -> do
+        modifyMVar_ mvar $ \(thread', action', value') -> do
+          when (not $ isNothing thread') $ let Just thread'' = thread' in killThread thread''
           newThreadId <- forkIO $ do
             threadDelay timeout
             modifyMVar_ mvar $ \(_, action'', _) -> return (Nothing, action'', Nothing)
