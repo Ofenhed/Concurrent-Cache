@@ -50,11 +50,11 @@ fetch (TimedCachedData (timeout, mvar)) = go where
         return value'
 
 
--- |Create a cache with a timeout from an (IO ()) function.
+-- |Create a cache which will execute an (IO ()) function on demand
+-- a maximum of 1 times.
 createReadOnceCache  :: IO (a)
             -- ^ @Fetcher@, the function that returns the data which should
-            -- be cached. If @Timeout@ is not set to zero, this function
-            -- must be allowed to be called more than once.
+            -- be cached. 
             -> IO (CachedData a)
 createReadOnceCache action = do
   var <- newMVar $ Left action
