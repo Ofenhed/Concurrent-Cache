@@ -8,9 +8,7 @@ data Timeout = TimeSinceCreation Int | TimeSinceLastRead Int
 
 data CachedData a = TimedCachedData (Timeout, (MVar (Maybe ThreadId, IO a, Maybe a))) | ReadOnceCachedData (MVar (Either (IO a) a))
 
--- |Only fetch data if it has been cached. Useful for example when
--- a database connection is being cached, and it has to be closed when it
--- is no longer needed, but should not be opened just to be closed.
+-- |Only fetch data if it has been cached.
 fetchCached :: CachedData a
             -> IO (Maybe a)
 fetchCached (ReadOnceCachedData mvar) = do
@@ -38,7 +36,6 @@ fetchCached (TimedCachedData (timeout, mvar)) = do
 
 -- |Fetch data from a cache
 fetch :: CachedData a
-      -- ^ @Cache@, the cache to fetch a value from
       -> IO (a)
 fetch state@(ReadOnceCachedData mvar) = go where
   go = do
