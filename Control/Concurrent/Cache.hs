@@ -1,4 +1,4 @@
-module Control.Concurrent.Cache (CachedData, fetch, createReadOnceCache, createTimedCache) where
+module Control.Concurrent.Cache (CachedData, fetch, fetchCached, createReadOnceCache, createTimedCache) where
 
 import Data.Maybe (isNothing)
 import Control.Concurrent (forkIO, threadDelay, killThread, MVar, modifyMVar_, readMVar, ThreadId, newMVar)
@@ -8,46 +8,60 @@ data Timeout = TimeSinceCreation Int | TimeSinceLastRead Int
 
 data CachedData a = TimedCachedData (Timeout, (MVar (Maybe ThreadId, IO a, Maybe a))) | ReadOnceCachedData (MVar (Either (IO a) a))
 
+-- |Only fetch data iff it has been cached. Useful for example when
+-- a database connection is being cached, and it has to be closed when it
+-- is no longer needed, but should not be opened just to be closed.
+fetchCached :: CachedData a
+            -> IO (Maybe a)
+fetchCached (ReadOnceCachedData mvar) = do
+    cached <- readMVar mvar
+    return $ case cached of
+                  Left _ -> Nothing
+                  Right value -> Just value
+
+fetchCached (TimedCachedData (timeout, mvar)) = do
+  (_,_,value) <- readMVar mvar
+  modifyMVar_ mvar $ \mvar'@(thread', action', value') -> do
+    let newThread x = do threadDelay x
+                         modifyMVar_ mvar $ \(_, action'', _) -> return (Nothing, action'', Nothing)
+    case timeout of
+         TimeSinceLastRead time -> do
+           when (not $ isNothing thread') $ let Just thread'' = thread' in killThread thread''
+           newThreadId <- forkIO $ newThread time
+           return (Just newThreadId, action', value')
+         TimeSinceCreation time -> do
+           if (isNothing thread')
+              then do newThread' <- forkIO $ newThread time
+                      return (Just newThread', action', value')
+              else return mvar'
+  return value
+
 -- |Fetch data from a cache
 fetch :: CachedData a
       -- ^ @Cache@, the cache to fetch a value from
       -> IO (a)
-fetch (ReadOnceCachedData mvar) = go where
+fetch state@(ReadOnceCachedData mvar) = go where
   go = do
-    cached <- readMVar mvar
+    cached <- fetchCached state
     case cached of
-      Left _ -> do
+      Nothing -> do
         modifyMVar_ mvar $ \cached' -> case cached' of
-                                          Left x -> do liftM Right x
+                                          Left x -> liftM Right x
                                           Right x -> return $ Right x
         go
-      Right value -> return value
+      Just value -> return value
 
-fetch (TimedCachedData (timeout, mvar)) = go where
+fetch state@(TimedCachedData (timeout, mvar)) = go where
   go = do
-    (thread,_,value) <- readMVar mvar
-    case value of
+    cached <- fetchCached state
+    case cached of
       Nothing -> do
-        modifyMVar_ mvar $ \mvar'@(threadId', action', value') -> case value' of
-                                          Nothing -> do newVal <- action'
-                                                        return (threadId', action', Just newVal)
+        modifyMVar_ mvar $ \mvar'@(threadId, action, value) -> case value of
+                                          Nothing -> do newVal <- action
+                                                        return (threadId, action, Just newVal)
                                           Just x -> return $ mvar'
         go
-      Just value' -> do 
-        modifyMVar_ mvar $ \mvar'@(thread', action', value') -> do
-          let newThread x = do threadDelay x
-                               modifyMVar_ mvar $ \(_, action'', _) -> return (Nothing, action'', Nothing)
-          case timeout of
-               TimeSinceLastRead time -> do
-                 when (not $ isNothing thread') $ let Just thread'' = thread' in killThread thread''
-                 newThreadId <- forkIO $ newThread time
-                 return (Just newThreadId, action', value')
-               TimeSinceCreation time -> do
-                 if (isNothing thread')
-                    then do newThread' <- forkIO $ newThread time
-                            return (Just newThread', action', value')
-                    else return mvar'
-        return value'
+      Just value -> return value
 
 
 -- |Create a cache which will execute an (IO ()) function on demand
