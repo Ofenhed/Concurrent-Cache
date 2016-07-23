@@ -1,4 +1,4 @@
-module Control.Concurrent.Cache (CachedData, fetch, fetchCached, createReadOnceCache, createTimedCache) where
+module Control.Concurrent.Cache (CachedData, fetch, fetchCached, createReadOnceCache, createTimedCache, createCachePassthrough) where
 
 import Data.Maybe (isNothing)
 import Control.Concurrent (forkIO, threadDelay, killThread, MVar, modifyMVar_, readMVar, ThreadId, newMVar, mkWeakMVar)
@@ -10,8 +10,10 @@ type TimedCachedDataMVar a = MVar (Maybe ThreadId, IO a, Maybe a)
 
 data CachedData a = TimedCachedData Timeout (TimedCachedDataMVar a) (Weak (TimedCachedDataMVar a))
                     | ReadOnceCachedData (MVar (Either (IO a) a))
+                    | CachePassthrough a
 
 -- |Only fetch data if it has been cached.
+-- @since 0.2.1.0
 fetchCached :: CachedData a
             -> IO (Maybe a)
 fetchCached (ReadOnceCachedData mvar) = do
@@ -40,7 +42,10 @@ fetchCached (TimedCachedData timeout mvar weakMVar) = do
               else return mvar'
   return value
 
+fetchCached (CachePassthrough a) = return $ Just a
+
 -- |Fetch data from a cache
+-- @since 0.1.0.0
 fetch :: CachedData a
       -> IO (a)
 fetch state@(ReadOnceCachedData mvar) = go where
@@ -66,9 +71,11 @@ fetch state@(TimedCachedData timeout mvar _) = go where
         go
       Just value -> return value
 
+fetch (CachePassthrough a) = return a
 
 -- |Create a cache which will execute an (IO ()) function on demand
 -- a maximum of 1 times.
+-- @since 0.2.0.0
 createReadOnceCache  :: IO (a)
             -- ^ @Fetcher@, the function that returns the data which should
             -- be cached. 
@@ -78,6 +85,7 @@ createReadOnceCache action = do
   return $ ReadOnceCachedData var
 
 -- |Create a cache with a timeout from an (IO ()) function.
+-- @since 0.2.0.0
 createTimedCache  :: Int
             -- ^ @Timeout@ in microseconds before the cache is erased
             -> Bool
@@ -96,3 +104,11 @@ createTimedCache timeout resetOnRead action = do
                    else TimeSinceCreation timeout
   weakMVar <- mkWeakMVar var $ return ()
   return $ TimedCachedData timeout' var weakMVar
+
+-- |Create a cache variable which simply holds a value with no actual
+-- caching at all.
+-- @since 0.2.2.2
+createCachePassthrough :: a
+                       -- ^ @Variable@ to hold.
+                       -> CachedData a
+createCachePassthrough = CachePassthrough
