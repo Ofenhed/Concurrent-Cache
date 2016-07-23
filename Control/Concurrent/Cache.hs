@@ -8,7 +8,8 @@ import Control.Monad (when, liftM)
 data Timeout = TimeSinceCreation Int | TimeSinceLastRead Int 
 type TimedCachedDataMVar a = MVar (Maybe ThreadId, IO a, Maybe a)
 
-data CachedData a = TimedCachedData Timeout (TimedCachedDataMVar a) (Weak (TimedCachedDataMVar a)) | ReadOnceCachedData (MVar (Either (IO a) a))
+data CachedData a = TimedCachedData Timeout (TimedCachedDataMVar a) (Weak (TimedCachedDataMVar a))
+                    | ReadOnceCachedData (MVar (Either (IO a) a))
 
 -- |Only fetch data if it has been cached.
 fetchCached :: CachedData a
@@ -78,8 +79,7 @@ createReadOnceCache action = do
 
 -- |Create a cache with a timeout from an (IO ()) function.
 createTimedCache  :: Int
-            -- ^ @Timeout@ in microseconds before the cache is erased, 0 to
-            -- disable emptying of the cache
+            -- ^ @Timeout@ in microseconds before the cache is erased
             -> Bool
             -- ^ @resetTimerOnRead@, if true the timeout will be reset
             -- every time the cache is read, otherwise it will only be
