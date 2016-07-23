@@ -1,12 +1,14 @@
 module Control.Concurrent.Cache (CachedData, fetch, fetchCached, createReadOnceCache, createTimedCache) where
 
 import Data.Maybe (isNothing)
-import Control.Concurrent (forkIO, threadDelay, killThread, MVar, modifyMVar_, readMVar, ThreadId, newMVar)
+import Control.Concurrent (forkIO, threadDelay, killThread, MVar, modifyMVar_, readMVar, ThreadId, newMVar, mkWeakMVar)
+import System.Mem.Weak (deRefWeak, Weak)
 import Control.Monad (when, liftM)
 
 data Timeout = TimeSinceCreation Int | TimeSinceLastRead Int 
+type TimedCachedDataMVar a = MVar (Maybe ThreadId, IO a, Maybe a)
 
-data CachedData a = TimedCachedData (Timeout, (MVar (Maybe ThreadId, IO a, Maybe a))) | ReadOnceCachedData (MVar (Either (IO a) a))
+data CachedData a = TimedCachedData Timeout (TimedCachedDataMVar a) (Weak (TimedCachedDataMVar a)) | ReadOnceCachedData (MVar (Either (IO a) a))
 
 -- |Only fetch data if it has been cached.
 fetchCached :: CachedData a
@@ -17,11 +19,14 @@ fetchCached (ReadOnceCachedData mvar) = do
                   Left _ -> Nothing
                   Right value -> Just value
 
-fetchCached (TimedCachedData (timeout, mvar)) = do
+fetchCached (TimedCachedData timeout mvar weakMVar) = do
   (_,_,value) <- readMVar mvar
   modifyMVar_ mvar $ \mvar'@(thread', action', value') -> do
     let newThread x = do threadDelay x
-                         modifyMVar_ mvar $ \(_, action'', _) -> return (Nothing, action'', Nothing)
+                         dereffed <- deRefWeak weakMVar
+                         case dereffed of
+                              Just mvar'' -> modifyMVar_ mvar'' $ \(_, action'', _) -> return (Nothing, action'', Nothing)
+                              Nothing -> return ()
     case timeout of
          TimeSinceLastRead time -> do
            when (not $ isNothing thread') $ let Just thread'' = thread' in killThread thread''
@@ -48,7 +53,7 @@ fetch state@(ReadOnceCachedData mvar) = go where
         go
       Just value -> return value
 
-fetch state@(TimedCachedData (timeout, mvar)) = go where
+fetch state@(TimedCachedData timeout mvar _) = go where
   go = do
     cached <- fetchCached state
     case cached of
@@ -89,4 +94,5 @@ createTimedCache timeout resetOnRead action = do
   let timeout' = if resetOnRead
                    then TimeSinceLastRead timeout
                    else TimeSinceCreation timeout
-  return $ TimedCachedData (timeout', var)
+  weakMVar <- mkWeakMVar var $ return ()
+  return $ TimedCachedData timeout' var weakMVar
